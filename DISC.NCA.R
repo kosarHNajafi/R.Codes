@@ -41,6 +41,7 @@ dim(disc.mp.genes)
 print("Step 1 completed: Loading Metabolic Gene expression in Discovery set")
 
 #---2.Available METABRIC Clinical File as sampleAnnotation.disc =colData----------------------
+#Metabric Clinical file is uploaded in R.Codes Repository
 Metabric_Manual_disc <- read.delim("~/NCA/data/METABRIC Clinical.txt", row.names = 1)
 View(Metabric_Manual_disc)
 
