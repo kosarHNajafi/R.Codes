@@ -416,8 +416,30 @@ grid.text("Regulons", x= 0.97 , y=0.3, rot=270)
 
 dev.off()
 sessionInfo()
-#---10.Transcriptional Network Analysis (TNA)-----------
+#---??.Transcriptional Network Analysis (TNA)-----------
 rtna_disc <- tni2tna.preprocess(object = rtni_disc, 
                                 phenotype = disc_tf$expData, 
                                 hits = tnaData$hits, 
                                 phenoIDs = tnaData$phenoIDs)
+
+#---10.Extract Regulon Information--------------------------
+# Load necessary library
+library(dplyr)
+
+# Assuming `regulons` is a list where each element is named by the regulon (e.g., `regulons$DNMT1`)
+for (regulon_name in names(regulons)) {
+  regulon_data <- regulons[[regulon_name]]  # Access each regulon as a vector
+  
+  # Check if the regulon has more than one gene
+  if (length(regulon_data) > 1) {
+    # Prepare a data frame for output, including the gene names and values
+    output_df <- data.frame(Gene = names(regulon_data), Value = regulon_data)
+    
+    # Prepare the output file path
+    output_file <- paste0("G:/My Drive/ER/2.Metabolomics(GoogleDrive)/Metabolic Pathways/90 Metabolic Pathways.Patients/DISCOVERY/Regulons/", regulon_name, ".DISC.txt")
+    
+    # Write the regulon data to a file
+    write.table(output_df, file = output_file, sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
+  }
+}
+#
