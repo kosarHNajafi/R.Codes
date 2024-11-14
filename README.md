@@ -13,3 +13,5 @@ ER_annotation_colors <- list(
   "ER+" = c("0" = "lightgrey", "1" = "blue"),
   "ER-" = c("0" = "lightgrey", "1" = "red")
   )
+# Experience
+Always Create the code with a distinct name; instead of changing the code for every situation; just create a new project in the name that points out the corresponding label
