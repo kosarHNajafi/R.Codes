@@ -19,6 +19,424 @@ library(RTN)
 library(snow)
 
 set.seed(123)
+###################################################################################
+#---Metabolic pathway genes without it's overlap with TF as a seperate disc_mp[list] and TF gene expressions as disc_tf[list]-------
+#---1.Load Gene Expression Data of 90 metabolic pathways = a matrix for counts/assays---------------------------------
+
+#The mutal genes with TFs are being deleted
+#load txt. Format
+DISC.MP.Genes <- read.delim("~/NCA.ER/Disc.JustMP.Annotated2/Disc.Just.MP.Genes.txt")
+View(DISC.MP.Genes)
+
+#Preparing disc.mp.genes 
+disc.mp.genes <- DISC.MP.Genes[,-1]
+rownames(disc.mp.genes) <- DISC.MP.Genes[,1]
+
+# Replace dots with underscores in column names if needed
+colnames(disc.mp.genes) <- gsub("\\.", "_", colnames(disc.mp.genes))
+
+#Sort data by columnnames(Sample IDs) and Rownames(Gene Symbols)
+disc.mp.genes <- disc.mp.genes[,order(colnames(disc.mp.genes))]
+disc.mp.genes <- disc.mp.genes[order(rownames(disc.mp.genes)),]
+View(disc.mp.genes)
+str(disc.mp.genes)
+dim(disc.mp.genes)
+print("Step 1 completed: Loading Metabolic Gene expression in Discovery set")
+
+#---2.Available METABRIC Clinical File as sampleAnnotation.disc = colData----------------------
+Metabric_Manual_disc <- read.delim("~/NCA/data/METABRIC Clinical.txt", row.names = 1)
+View(Metabric_Manual_disc)
+
+Metabric_Manual_disc <- Metabric_Manual_disc[order(rownames(Metabric_Manual_disc)),]
+View(Metabric_Manual_disc)
+
+# Replace dots with underscores in column names if needed
+rownames(Metabric_Manual_disc) <- gsub("\\-", "_", rownames(Metabric_Manual_disc))
+View(Metabric_Manual_disc)
+
+# Load required library
+library(dplyr)
+
+# Assuming your dataset is named Metabric_Manual_disc
+# Create a new binary dataframe based on transformations
+Metabric_Manual_disc <- Metabric_Manual_disc %>%
+  transmute(
+    IDs = rownames(Metabric_Manual_disc),
+    Cohort = Cohort,
+    
+    OS.time = Overall.Survival..Months.,
+    OS.event = ifelse(Overall.Survival.Status == "1:DECEASED", 1, 0),
+    DSS.event = ifelse(Patient.s.Vital.Status == "Died of Disease", 1, 0),
+    RFS.event = ifelse(Relapse.Free.Status == "1:Recurred", 1, 0),
+    RFS.time = Relapse.Free.Status..Months.,
+    
+    Grade = Neoplasm.Histologic.Grade,
+    Size = Tumor.Size,
+    LN = Lymph.nodes.examined.positive,
+    Age = Age.at.Diagnosis,
+    LN = Lymph.nodes.examined.positive,
+    Age = Age.at.Diagnosis,
+    
+    
+    # Subtypes for LumA, LumB, Basal, Her2, Normal based on Pam50 subtype
+    LumA = ifelse(Pam50...Claudin.low.subtype == "LumA", 1, 0),
+    LumB = ifelse(Pam50...Claudin.low.subtype == "LumB", 1, 0),
+    Basal = ifelse(Pam50...Claudin.low.subtype == "Basal", 1, 0),
+    Her2 = ifelse(Pam50...Claudin.low.subtype == "Her2", 1, 0),
+    Normal = ifelse(Pam50...Claudin.low.subtype == "Normal", 1, 0),
+    
+    # ER and PR status (positive and negative)
+    `ER+` = ifelse(ER.Status == "Positive", 1, 0),
+    `ER-` = ifelse(ER.Status == "Negative", 1, 0),
+    
+    
+    # Histologic Grade categories G1, G2, G3
+    G1 = ifelse(Neoplasm.Histologic.Grade == 1, 1, 0),
+    G2 = ifelse(Neoplasm.Histologic.Grade == 2, 1, 0),
+    G3 = ifelse(Neoplasm.Histologic.Grade == 3, 1, 0),
+    
+    # Hormone Therapy (HT)
+    HT = ifelse(Hormone.Therapy == "YES", 1, 0),
+    
+  )
+
+# Print head of the colAnnotation for verification
+head(Metabric_Manual_disc)
+
+print("Step 3 completed: Manual METABRIC Clinical data")
+
+#---3.disc_mp Sample Annotation-----------------------------
+disc_mp_sample_ids <- colnames(disc.mp.genes)
+View(disc_mp_sample_ids)
+length(disc_mp_sample_ids)
+
+sort(disc_mp_sample_ids)
+View(disc_mp_sample_ids)
+length(disc_mp_sample_ids)
+
+# Find the common sample IDs between the two datasets
+common_samples_disc <- intersect(rownames(Metabric_Manual_disc), disc_mp_sample_ids)
+common_samples_disc <- sort(common_samples_disc)
+View(common_samples_disc)
+length(common_samples_disc)
+
+#
+all.equal(colnames(disc.mp.genes),colnames(disc.tf.genes))
+
+# Subset and reorder both datasets to only include common samples
+#1:
+counts.mp.disc <- disc.mp.genes[, common_samples_disc]
+all.equal(rownames(disc.mp.genes), rownames(counts.mp.disc))
+View(counts.mp.disc)
+dim(counts.mp.disc)
+
+#2:
+counts.tf.disc <- disc.tf.genes[,common_samples_disc]
+all.equal(rownames(disc.tf.genes),rownames(counts.tf.disc))
+View(counts.tf.disc)
+dim(counts.tf.disc)
+
+
+all.equal(colnames(counts.mp.disc),colnames(counts.tf.disc))
+
+#SampleAnnotation:
+sampleAnnotation.disc <- Metabric_Manual_disc[common_samples_disc, ]
+dim(sampleAnnotation.disc)
+
+# Verify that they are aligned
+all.equal(colnames(counts.mp.disc), rownames(sampleAnnotation.disc))  # Should return TRUE
+
+# If the first is not TRUE, you can match up the samples/columns in
+# counts with the samples/rows in sampleAnnotation.disc like this (which is fine
+# to run even if the first was TRUE):
+
+#tempindex <- match(colnames(counts.mp.disc), rownames(sample_metadata))
+#sampleAnnotation.disc <- sample_metadata[tempindex, ]
+
+#Check again
+
+all.equal(colnames(counts.mp.disc), rownames(sampleAnnotation.disc))
+
+print("Step 4 completed: Discovery SampleAnnotation Prepared")
+
+#---4.Load Ensembl Gene Annotation----------------------------------------------
+#1.Accessing the data available in Ensembl by biomaRT
+#2.Selecting an Ensembl BioMart database and dataset
+
+# Connect to Ensembl database, and query human genes
+ensembl <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl")
+
+
+#2.1##Step1: Identifying the database you need
+listEnsembl()
+ensembl <- useEnsembl(biomart = "genes")
+ensembl
+
+#2.2##Step 2: Choosing a dataset
+#we look at which datasets are available in the selected BioMart
+#by using the function listDatasets()
+datasets <- listDatasets(ensembl)
+
+##if we want to find the details of any datasets
+##in our ensembl mart that contain the term ‘hsapiens’
+##we could do the following
+searchDatasets(mart = ensembl, pattern = "hsapiens")
+
+ensembl <- useDataset(dataset = "hsapiens_gene_ensembl", mart = ensembl)
+
+
+#2.3##Ensembl mirror sites
+
+ensembl <- useEnsembl(biomart = "ensembl", 
+                      dataset = "hsapiens_gene_ensembl", 
+                      mirror = "useast")
+
+#2.4##Using archived versions of Ensembl
+listEnsemblArchives()
+listEnsembl(version = 113)
+ensembl_113 <- useEnsembl(biomart = "genes", 
+                          dataset = "hsapiens_gene_ensembl",
+                          host = "https://oct2024.archive.ensembl.org",
+                          version = 113)
+
+View(listAttributes(ensembl_113))
+
+print("Step 4 completed: Ensembl Gene Information loaded")
+
+#---5.disc_mp Gene Annotation ---------------------------
+# Extract gene annotations for the corresponding genes from `ensembl_113`
+gene_annot_mp_disc <- getBM(
+  attributes = c("ensembl_gene_id", "external_gene_name", "chromosome_name", "start_position", "end_position", "strand","description"),
+  filters = "external_gene_name",
+  values = rownames(disc.mp.genes),
+  mart = ensembl_113
+)
+
+View(gene_annot_mp_disc)
+
+table(duplicated(gene_annot_mp_disc$external_gene_name))
+
+#Since it has Duplicated values, we will select the correct ID manually and then read into RStudio again
+write.table(gene_annot_mp_disc,file = file.path("~/NCA.ER/","Gene_Ensembl_113_Retrieved_NO.TF.txt"),sep = "\t",row.names = FALSE)
+gene_annot_mp_disc <- read.delim("~/NCA.ER/Gene_Ensembl_113_Used_NO.TF.txt")
+View(gene_annot_mp_disc)
+
+# Save gene_annot_mp_disc as a txt file
+write.table(gene_annot_mp_disc, file = file.path("~/NCA.ER/Disc.JustMP.Annotated2/","gene_annot_mp_disc_NO.TF_113.txt"), sep = "\t", row.names = FALSE, quote = FALSE)
+
+# Extract gene IDs from both datasets
+ensemble_ids <- gene_annot_mp_disc$external_gene_id
+View(ensemble_ids)
+
+ensemble_ids <- sort(ensemble_ids)
+length(ensemble_ids)
+
+disc_mp_gene_ids <- rownames(counts.mp.disc)
+View(disc_mp_gene_ids)
+
+common_genes <- intersect(ensemble_ids, disc_mp_gene_ids) # Should match or be close to 1420
+common_genes <- sort(common_genes)
+all.equal(ensemble_ids, common_genes)
+length(common_genes)
+
+# Subset and reorder both datasets to only include common samples
+counts.mp.disc <- counts.mp.disc[common_genes, ]
+View(counts.mp.disc)
+
+all.equal(ensemble_ids,rownames(counts.mp.disc))
+
+gene_annot_mp_disc <- gene_annot_mp_disc[gene_annot_mp_disc$external_gene_name %in% common_genes, ]
+rownames(gene_annot_mp_disc) <- gene_annot_mp_disc$external_gene_name
+View(gene_annot_mp_disc)
+all.equal(gene_annot_mp_disc$external_gene_name, rownames(counts.mp.disc))
+
+#Sort counts.mp.disc and gene_annot_mp_disc based on rownames which is gene names
+counts.mp.disc <- counts.mp.disc[order(rownames(counts.mp.disc)), ]
+gene_annot_mp_disc <- gene_annot_mp_disc[order(rownames(gene_annot_mp_disc)), ]
+
+all.equal(rownames(counts.mp.disc), rownames(gene_annot_mp_disc))  # Should return TRUE if aligned
+dim(counts.mp.disc)
+dim(gene_annot_mp_disc)
+View(gene_annot_mp_disc)
+
+#In rtni analysis it needs "SYMBOL" in rowAnnotation
+colnames(gene_annot_mp_disc)
+
+# Suppose you have a data frame named 'df' with a column called 'external_gene_id'
+colnames(gene_annot_mp_disc)[colnames(gene_annot_mp_disc) == "external_gene_name"] <- "SYMBOL"
+colnames(gene_annot_mp_disc)[colnames(gene_annot_mp_disc) == "ensembl_gene_id"] <- "ENSEMBL"
+
+# Verify the change
+colnames(gene_annot_mp_disc)
+
+
+# One final check:
+stopifnot(rownames(gene_annot_mp_disc) == rownames(counts.mp.disc), # features
+          rownames(sampleAnnotation.disc) == colnames(counts.mp.disc)) # samples
+
+print("Step 5 completed: GeneAnnotation/RowAnnotation done for discovery set")
+
+#---6.Create disc_mp list/SummarizedExperiment-----------------------
+counts.mp.disc <- as.matrix(counts.mp.disc)
+View(counts.mp.disc)
+str(counts.mp.disc)
+
+disc_mp <- list(
+  expData = counts.mp.disc,                       # expData as an assay
+  rowAnnotation = gene_annot_mp_disc,             # Gene annotations (row metadata)
+  colAnnotation = sampleAnnotation.disc           # Sample annotations (column metadata)
+)
+
+View(disc_mp)
+
+#SummarizedExperiment of rtni_disc_mp_se
+#rtni_disc_mp_se <- SummarizedExperiment(
+#  assays = counts.mp.disc,
+#  rowData = gene_annot_mp_disc,
+#  colData = sampleAnnotation.disc
+#)
+
+#View(rtni_disc_mp_se)
+
+# Check dimensions and alignment
+dim(counts.mp.disc)
+#dim(disc_mp_se$expData)  # Should match dimensions of counts.mp.disc
+all.equal(colnames(disc_mp$expData), rownames(sampleAnnotation.disc))  # Should return TRUE
+all.equal(disc_mp$expData, counts.mp.disc)
+all.equal(disc_mp$colAnnotation, sampleAnnotation.disc)
+
+print("Step 6 completed: list/SummarizedExperiment file prepared for Discovery")
+
+#---7.RegulatoryElements: Load Gene Expression Data of Lambert TFs-----------------
+
+# Load TF annotation
+data("tfsData")
+
+#Manually aligned the expression of Lamber TF genes and loaded in R as a txt. Format
+DISC.TF.Genes <- read.delim("~/NCA.ER/Disc.JustMP.Annotated2/DISC.TF.Genes.Lambert.txt")
+View(DISC.TF.Genes)
+
+#Preparing disc.tf.genes 
+disc.tf.genes <- DISC.TF.Genes[,-c(1,2)]
+rownames(disc.tf.genes) <- DISC.TF.Genes[,2]
+
+# Replace dots with underscores in column names if needed
+colnames(disc.tf.genes) <- gsub("\\.", "_", colnames(disc.tf.genes))
+
+#Sort data by columnnames(Sample IDs) and Rownames(Gene Symbols)
+disc.tf.genes <- disc.tf.genes[,order(colnames(disc.tf.genes))]
+disc.tf.genes <- disc.tf.genes[order(rownames(disc.tf.genes)),]
+View(disc.tf.genes)
+str(disc.tf.genes)
+dim(disc.tf.genes)
+
+all.equal(colnames(counts.mp.disc),colnames(counts.tf.disc))
+
+gene_annot_tf_disc <- getBM(
+  attributes = c("ensembl_gene_id", "external_gene_name", "chromosome_name", "start_position", "end_position", "strand","description"),
+  filters = "external_gene_name",
+  values = rownames(disc.tf.genes),
+  mart = ensembl_113
+)
+
+table(duplicated(gene_annot_tf_disc$external_gene_name))
+
+#Manually Selecting the Unique IDs
+write.table(gene_annot_tf_disc,file = file.path("~/NCA.ER/Disc.Justtf.Annotated2/","Gene_Ensembl_113_Retrieved_TF.txt"),sep = "\t",row.names = FALSE)
+gene_annot_tf_disc <- read.delim("~/NCA.ER/Disc.Justtf.Annotated2/Gene_Ensembl_113_Used_TF.txt")
+
+table(duplicated(gene_annot_tf_disc$external_gene_name))
+
+# Extract gene IDs from both datasets
+ensemble_ids_tf <- gene_annot_tf_disc$external_gene_name
+View(ensemble_ids_tf)
+
+ensemble_ids_tf <- sort(ensemble_ids_tf)
+length(ensemble_ids_tf)
+
+disc_tf_gene_ids <- rownames(counts.tf.disc)
+View(disc_tf_gene_ids)
+
+common_genes_tf <- intersect(ensemble_ids_tf, disc_tf_gene_ids) # Should match or be close to 1420
+common_genes_tf <- sort(common_genes_tf)
+all.equal(ensemble_ids_tf, common_genes_tf)
+length(common_genes)
+
+# Subset and reorder both datasets to only include common satfles
+counts.tf.disc <- counts.tf.disc[common_genes_tf, ]
+View(counts.tf.disc)
+
+all.equal(ensemble_ids_tf,rownames(counts.tf.disc))
+
+gene_annot_tf_disc <- gene_annot_tf_disc[gene_annot_tf_disc$external_gene_name %in% common_genes_tf, ]
+rownames(gene_annot_tf_disc) <- gene_annot_tf_disc$external_gene_name
+View(gene_annot_tf_disc)
+all.equal(gene_annot_tf_disc$external_gene_name, rownames(counts.tf.disc))
+
+#Sort counts.tf.disc and gene_annot_tf_disc based on rownames which is gene names
+counts.tf.disc <- counts.tf.disc[order(rownames(counts.tf.disc)), ]
+gene_annot_tf_disc <- gene_annot_tf_disc[order(rownames(gene_annot_tf_disc)), ]
+
+all.equal(rownames(counts.tf.disc), rownames(gene_annot_tf_disc))  # Should return TRUE if aligned
+dim(counts.tf.disc)
+dim(gene_annot_tf_disc)
+View(gene_annot_tf_disc)
+
+#In rtni analysis it needs "SYMBOL" in rowAnnotation
+colnames(gene_annot_tf_disc)
+
+# Suppose you have a data frame named 'df' with a column called 'external_gene_id'
+colnames(gene_annot_tf_disc)[colnames(gene_annot_tf_disc) == "external_gene_name"] <- "SYMBOL"
+colnames(gene_annot_tf_disc)[colnames(gene_annot_tf_disc) == "ensembl_gene_id"] <- "ENSEMBL"
+
+# Verify the change
+colnames(gene_annot_tf_disc)
+
+
+counts.tf.disc <- as.matrix(counts.tf.disc)
+View(counts.tf.disc)
+str(counts.tf.disc)
+
+disc_tf <- list(
+  expData = counts.tf.disc,                       # expData as an assay
+  rowAnnotation = gene_annot_tf_disc,             # Gene annotations (row metadata)
+  colAnnotation = sampleAnnotation.disc           # Satfle annotations (column metadata)
+)
+
+View(disc_tf)
+
+# Check dimensions and alignment
+dim(counts.tf.disc)
+
+#dim(disc_tf_se$expData)  # Should match dimensions of counts.tf.disc
+all.equal(colnames(disc_tf$expData), rownames(sampleAnnotation.disc))  # Should return TRUE
+all.equal(disc_tf$expData, counts.tf.disc)
+all.equal(disc_tf$colAnnotation, sampleAnnotation.disc)
+
+# One final check:
+stopifnot(rownames(gene_annot_tf_disc) == rownames(counts.tf.disc), # features
+          rownames(sampleAnnotation.disc) == colnames(counts.tf.disc)) # satfles
+
+print("Step 7 completed: GeneAnnotation/RowAnnotation done for discovery set")
+
+#---8.Run the TNI constructor with the extracted matrix for disc_mp--------------
+#This dataset consists of a list with 3 objects:
+##a named gene expression matrix (tniData$expData),
+##a data frame with gene annotations (tniData$rowAnnotation), 
+##and a data frame with sample annotations (tniData$colAnnotation).
+##alternatively, 'expData' can be a 'SummarizedExperiment' object
+rtni_disc <- tni.constructor(expData = disc_mp$expData, 
+                             regulatoryElements = rownames(counts.tf.disc), 
+                             rowAnnotation = disc_tf$rowAnnotation, 
+                             colAnnotation = disc_mp$colAnnotation)
+
+#-Preprocessing for input data...
+#--Mapping 'expData' to 'rowAnnotation'...
+#Error: all rownames in the expression data matrix should be available
+#either in rownames or col1 of the row annotation!
+
+#DUE TO ERROR THE PROCESS STOPPED HERE
+#############################################################################################################################
 #---1.Load Gene Expression Data of 90 metabolic pathways = a mtrix for counts/assays---------------------------------
 #load txt. Format
 DISC.MP.Genes <- read.delim("~/NCA/data/DISC.MP.Genes.txt")
