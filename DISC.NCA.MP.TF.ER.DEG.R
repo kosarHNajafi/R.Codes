@@ -1,3 +1,5 @@
+The results are not satisfying applying DEG tha taking the sig ones and procedd only with them is like applying DEG twice.
+Dropped
 #---Load libraries-----------------
 library(biomaRt)
 library(RTN)
