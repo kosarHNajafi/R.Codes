@@ -839,6 +839,14 @@ rtna_disc <- tni2tna.preprocess(object = rtni_disc,
                                 phenotype = disc_tf$expData, 
                                 hits = tnaData$hits, 
                                 phenoIDs = tnaData$phenoIDs)
+#######
+#20k genes in discovery and validation datasets 
+#-Preprocessing for input data...
+#--Mapping 'phenotype' to 'phenoIDs'...
+#--Mapping 'hits' to 'phenoIDs'...
+#--Mapping 'transcriptionalNetwork' annotation to 'phenotype'...
+#--Checking agreement between 'transcriptionalNetwork' and 'phenotype'... 5.3% ! 
+# Error: NOTE: 94.7% of 'transcriptionalNetwork' targets not represented in the 'phenotype'!
 
 #---10.Extract Regulon Information--------------------------
 # Load necessary library
