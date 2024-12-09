@@ -776,7 +776,65 @@ regulons <- tni.get(rtni_disc, what = "regulons.and.mode", idkey = "SYMBOL")
 View(regulons)
 head(regulons)
 
-#---9. Regulon activity profiles----------
+###To extract regulons all in one txt.###
+# Find the maximum number of genes across all regulons
+max_genes <- max(sapply(regulon.NA, function(x) if (is.null(x)) 0 else length(x)))
+
+# Create a list of data frames with equal row lengths
+regulon_list <- lapply(names(regulon.NA), function(regulon_name) {
+  regulon_data <- regulon.NA[[regulon_name]]
+  
+  # Handle empty or NULL regulons
+  if (is.null(regulon_data) || length(regulon_data) == 0) {
+    df <- data.frame(
+      Gene = rep(NA, max_genes),
+      Value = rep(NA, max_genes),
+      stringsAsFactors = FALSE
+    )
+  } else if (is.vector(regulon_data)) {
+    # Ensure matching lengths for Gene and Value
+    genes <- names(regulon_data)
+    values <- regulon_data
+    if (length(genes) == 0) genes <- rep(NA, length(values))
+    df <- data.frame(
+      Gene = genes,
+      Value = values,
+      stringsAsFactors = FALSE
+    )
+  } else if (is.matrix(regulon_data) || is.data.frame(regulon_data)) {
+    df <- data.frame(
+      Gene = rownames(regulon_data),
+      Value = regulon_data[, 1], # Assuming values are in the first column
+      stringsAsFactors = FALSE
+    )
+  } else {
+    df <- data.frame(
+      Gene = rep(NA, max_genes),
+      Value = rep(NA, max_genes),
+      stringsAsFactors = FALSE
+    )
+  }
+  
+  # Extend to max_genes rows if needed
+  if (nrow(df) < max_genes) {
+    df <- rbind(df, data.frame(
+      Gene = rep(NA, max_genes - nrow(df)),
+      Value = rep(NA, max_genes - nrow(df))
+    ))
+  }
+  
+  # Rename columns with regulon names
+  colnames(df) <- c(paste0(regulon_name, "_Gene"), paste0(regulon_name, "_Value"))
+  return(df)
+})
+
+# Combine all into one data frame
+regulon_df <- do.call(cbind, regulon_list)
+
+# Write to file
+write.table(regulon_df, file = file.path("~/NCA.ER/NCA.MP.TF.Finalized/NCA.Disc.MP.tf/", "Disc.regulon.NA.txt"), sep = "\t", row.names = FALSE, quote = FALSE)
+
+#---9. Regulon activity profiles[skipped]----------
 
 library(Fletcher2013b)
 library(pheatmap)
@@ -834,7 +892,133 @@ grid.text("Regulons", x= 0.97 , y=0.3, rot=270)
 
 dev.off()
 sessionInfo()
-#---??.Transcriptional Network Analysis (TNA)-----------
+#---10.Transcriptional Network Analysis (TNA)-----------
+ #---10.1--MP genes-----------
+
+#Since the samples are the same sampleAnnotation.disc_tna will be used
+Disc.MP.Genes <- read.delim("~/NCA.ER/data/DISC.MP.Genes.txt",header = TRUE, row.names = 1)
+View(Disc.MP.Genes)
+
+#Order by rownames and colnames
+Disc.MP.Genes <- Disc.MP.Genes[order(rownames(Disc.MP.Genes)),order(colnames(Disc.MP.Genes))]
+
+# Replace dots with underscores in column names if needed
+colnames(Disc.MP.Genes) <- gsub("\\.", "_", colnames(Disc.MP.Genes))
+
+View(Disc.MP.Genes)
+dim(Disc.MP.Genes) #[1] 1420  993
+
+counts.mp.disc <- as.matrix(disc.mp[,common_samples_disc])
+identical(colnames(counts.mp.disc),colnames(counts.mp.tf.disc))
+str(counts.mp.disc)
+#num [1:1420, 1:988] 6.24 5.23 6.78 5.58 5.71 ...
+#- attr(*, "dimnames")=List of 2
+#..$ : chr [1:1420] "A4GALT" "A4GNT" "AACS" "AADAC" ...
+#..$ : chr [1:988] "MB_0005" "MB_0006" "MB_0008" "MB_0014" ...
+
+sampleAnnotation.disc_tna_mp <- METABRIC_Manual_Disc[common_samples_disc, ]
+dim(sampleAnnotation.disc_tna_mp) #[1] 988  36
+View(sampleAnnotation.disc_tna_mp)
+
+
+# Verify that they are aligned
+all.equal(colnames(counts.mp.disc), rownames(sampleAnnotation.disc_tna_mp))  # Should return TRUE
+
+print("Step 10.3 completed: Discovery SampleAnnotation Prepared")
+
+# Check that row names of sample_annotations match column names of expression_data
+if (!all(rownames(sampleAnnotation.disc_tna_mp) == colnames(counts.mp.disc))) {
+  stop("Mismatch between sample annotation rownames and expression data colnames!")
+}
+
+# Load required package
+library(limma)
+
+# Create the design matrix for the linear model
+# Assuming your label column is named "ER_status" with values "ERpos" and "ERneg"
+design_mp_pos <- model.matrix(~ 0 + factor(sampleAnnotation.disc_tna_mp$ER.Status))
+colnames(design_mp_pos) <- levels(factor(sampleAnnotation.disc_tna_mp$ER.Status))
+rownames(design_mp_pos) <- rownames(sampleAnnotation.disc_tna_mp)
+View(design_mp_pos)
+
+all.equal(as.vector(design_mp_pos[,"Positive"]),as.vector(sampleAnnotation.disc$`ER+`))
+all(design_mp_pos[,"Positive"] == sampleAnnotation.disc$`ER+`)
+all(design_mp_pos[,"Negative"] == sampleAnnotation.disc$`ER-`)
+
+# Fit the linear model using limma
+fit_mp_pos <- lmFit(counts.mp.disc, design_mp_pos)
+View(fit_mp_pos)
+
+# Create contrast matrix to compare ERpos vs ERneg
+contrast_matrix_mp_pos <- makeContrasts(Positive_vs_Negative = Positive - Negative, levels = design_mp_pos)
+
+# Apply the contrast matrix
+fit2_mp_pos <- contrasts.fit(fit_mp_pos, contrast_matrix_mp_pos)
+
+# Empirical Bayes adjustment
+fit2_mp_pos <- eBayes(fit2_mp_pos)
+
+# Extract results (log2 fold changes, p-values, etc.)
+phenotype_mp_pos <- topTable(fit2_mp_pos, coef = "Positive_vs_Negative", adjust.method = "BH", number = Inf)
+
+# Order phenotype alphabetically by row names
+phenotype_mp_pos <- phenotype_mp_pos[order(rownames(phenotype_mp_pos)), ]
+
+# Save results to a file if needed
+write.table(phenotype_mp_pos,file = file.path("~/NCA.ER/NCA.MP.TF.Finalized/NCA.Disc.MP.tf/tni.dpi.filter.epsNA/","DEG.Disc.MP.txt"),sep = "\t")
+
+# Output the top results for inspection
+View(phenotype_mp_pos)
+dim(phenotype_mp_pos)  #[1] 1420    6
+
+all(rownames(phenotype_mp_pos) == rownames(counts.mp.disc))
+
+# Filter genes with significant adjusted p-value [& abs(logFC) > 1]
+hits_disc.mp <- subset(phenotype_mp_pos, adj.P.Val < 0.05)
+
+# View the differentially expressed genes
+View(hits_disc.mp)
+dim(hits_disc.mp) #[1] 976   6
+
+#Error: NOTE: all names in 'phenotype' should be available in col1 of 'phenoIDs'!
+library(dplyr)
+gene_annot_mp_disc_tna <- gene_annot_mp.tf_disc %>%
+  select(SYMBOL, everything())
+
+gene_annot_mp_disc_tna_common <- intersect(gene_annot_mp_disc_tna$SYMBOL,rownames(hits_disc.mp))
+gene_annot_mp_disc_tna <- gene_annot_mp_disc_tna[gene_annot_mp_disc_tna_common,]
+View(gene_annot_mp_disc_tna)
+
+
+all(gene_annot_mp_disc_tna$SYMBOL == gene_annot_mp_disc_tna_common)
+
+hits_disc.mp <- hits_disc.mp[gene_annot_mp_disc_tna_common,]
+
+# Extract 'logFC' as a named numeric vector
+logFC_disc_mp <- setNames(hits_disc.mp$logFC, rownames(hits_disc.mp))
+View(logFC_disc_mp)
+
+all.equal(names(logFC_disc_mp),rownames(hits_disc.mp))
+all.equal(as.vector(logFC_disc_mp),hits_disc.mp$logFC)
+
+tna.disc_mp <- list(
+  phenotype = logFC_disc_mp,
+  phenoID = gene_annot_mp_disc_tna,
+  hits = rownames(hits_disc.mp)
+)
+
+View(tna.disc_mp)
+save(phenotype_mp_pos,logFC_disc_mp,hits_disc.mp,file = file.path("~/NCA.ER/NCA.MP.TF.Finalized/NCA.Disc.MP.tf/","Differential.Exp.Disc.MP.RData"))
+
+# Input 1: 'object', a TNI object with regulons
+# Input 2: 'phenotype', a named numeric vector, usually log2 differential expression levels
+# Input 3: 'hits', a character vector, usually a set of differentially expressed genes
+# Input 4: 'phenoIDs', an optional data frame with gene anottation mapped to the phenotype
+
+#set.seed( Since I didnt run everything from scratch for this part I used set.seed() in saved Rproject
+
+#rtni_disc_mp.tf.NA after dpi.filter
+#CHECK "rtnaData"                       
 rtna_disc <- tni2tna.preprocess(object = rtni_disc, 
                                 phenotype = disc_tf$expData, 
                                 hits = tnaData$hits, 
@@ -863,25 +1047,112 @@ rtna_disc <- tni2tna.preprocess(object = rtni_disc,
 #  
 #  Warning message:
 #  NOTE: 66.6% of 'transcriptionalNetwork' targets not represented in the 'phenotype'! 
+# Run the MRA method
+rtna_disc.mp <- tna.mra(rtna_disc.mp)
+#-Performing master regulatory analysis...
+#--For 643 regulons...
+#|==============================================================================| 100%
+#Master regulatory analysis complete
 
-#---10.Extract Regulon Information--------------------------
-# Load necessary library
-library(dplyr)
+# Get MRA results;
+#..setting 'ntop = -1' will return all results, regardless of a threshold
+mra_disc.mp <- tna.get(rtna_disc.mp, what="mra", ntop = -1)
+View(mra_disc.mp)
+write.table(mra_disc.mp,file = file.path("~/NCA.ER/NCA.MP.TF.Finalized/NCA.Disc.MP.tf/tni.dpi.filter.epsNA/","DISC.MRA.MP.txt"),sep = "\t")
 
-# Assuming `regulons` is a list where each element is named by the regulon (e.g., `regulons$DNMT1`)
-for (regulon_name in names(regulons)) {
-  regulon_data <- regulons[[regulon_name]]  # Access each regulon as a vector
-  
-  # Check if the regulon has more than one gene
-  if (length(regulon_data) > 1) {
-    # Prepare a data frame for output, including the gene names and values
-    output_df <- data.frame(Gene = names(regulon_data), Value = regulon_data)
-    
-    # Prepare the output file path
-    output_file <- paste0("G:/My Drive/ER/2.Metabolomics(GoogleDrive)/Metabolic Pathways/90 Metabolic Pathways.Patients/DISCOVERY/Regulons/", regulon_name, ".DISC.txt")
-    
-    # Write the regulon data to a file
-    write.table(output_df, file = output_file, sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
-  }
-}
-#
+# Run the GSEA method
+# Please set nPermutations >= 1000
+rtna_disc.mp <- tna.gsea1(rtna_disc.mp, nPermutations=1000)
+#-Performing gene set enrichment analysis...
+#--For 438 regulons...
+#|==============================================================================| 100%
+#-Gene set enrichment analysis complete 
+
+rtna_disc.mp.15 <- tna.gsea1(rtna_disc.mp, nPermutations=1000,minRegulonSize = 15)
+#-Performing gene set enrichment analysis...
+#--For 438 regulons...
+#|==============================================================================| 100%
+#-Gene set enrichment analysis complete 
+
+rtna_disc.mp.15.filtermethod <- tna.gsea1(rtna_disc.mp, nPermutations=1000,sizeFilterMethod = "posANDneg",minRegulonSize = 15)
+#-Performing gene set enrichment analysis...
+#--For 12 regulons...
+#|==============================================================================| 100%
+#-Gene set enrichment analysis complete 
+
+# Get GSEA results
+gsea1_disc.mp <- tna.get(rtna_disc.mp, what="gsea1", ntop = -1)
+head(gsea1_disc.mp)
+#Regulon Regulon.Size Observed.Score     Pvalue Adjusted.Pvalue
+#ENSG00000065978    YBX1           72           0.67 1.0634e-08      7.7625e-07
+#ENSG00000091831    ESR1           56           0.72 1.4048e-08      8.7900e-07
+#ENSG00000107485   GATA3           48           0.73 1.7182e-07      8.3618e-06
+#ENSG00000119866  BCL11A           47           0.69 1.7526e-06      6.9787e-05
+#ENSG00000173894    CBX2           58           0.64 1.0092e-05      3.6836e-04
+#ENSG00000125850   OVOL2           32           0.74 2.1966e-05      7.4008e-04
+
+View(gsea1_disc.mp)
+
+gsea1_disc.mp.15.filtered <- tna.get(rtna_disc.mp.15.filtermethod, what="gsea1", ntop = -1)
+head(gsea1_disc.mp.15.filtered)
+#Regulon Regulon.Size Observed.Score     Pvalue Adjusted.Pvalue
+#ENSG00000065978    YBX1           72           0.67 1.6002e-08      1.0013e-06
+#ENSG00000091831    ESR1           56           0.72 1.9495e-08      1.0674e-06
+#NSG00000107485   GATA3           48           0.73 1.9519e-07      8.5492e-06
+#ENSG00000119866  BCL11A           47           0.69 8.5550e-07      3.4064e-05
+#ENSG00000125850   OVOL2           32           0.74 6.5153e-06      2.3781e-04
+#ENSG00000173894    CBX2           58           0.64 1.2187e-05      4.0821e-04
+
+write.table(gsea1_disc.mp,file = file.path("~/NCA.ER/NCA.MP.TF.Finalized/NCA.Disc.MP.tf/tni.dpi.filter.epsNA/","DISC.tna.gsea1.mp.txt"),sep = "\t",row.names = TRUE, col.names = TRUE)
+
+# Filter for significant TFs
+gsea1_disc.mp.sig <- gsea1_disc.mp[gsea1_disc.mp$Adjusted.Pvalue <= 0.05, ]
+View(gsea1_disc.mp.sig)
+write.table(gsea1_disc.mp.sig,file = file.path("~/NCA.ER/NCA.MP.TF.Finalized/NCA.Disc.MP.tf/tni.dpi.filter.epsNA/","DISC.sig.tna.gsea1.mp.txt"),sep = "\t")
+
+# Plot GSEA results for significant TFs
+tna.plot.gsea1(
+  rtna_disc.mp.15.filtermethod,
+  ntop = 5,
+  labPheno = "abs(log2 fold changes)",
+  tfs = rownames(gsea1_disc.mp.15.filtered), # Include only significant TFs
+  file = "gsea1_filtered_disc_mp_top5.pdf",
+  filepath = "~/NCA.ER/NCA.MP.TF.Finalized/NCA.Disc.MP.tf/"
+)
+
+# Plot GSEA results
+tna.plot.gsea1(rtna_disc.mp,
+               labPheno="abs(log2 fold changes),Disc", 
+               ntop = 5,
+               file = "tna.gsea1_no_top5.mp.disc", 
+               filepath = "~/NCA.ER/NCA.MP.TF.Finalized/NCA.Disc.MP.tf/tni.dpi.filter.epsNA/",
+               ylimPanels = c(0.0,3.5,0.0,2)
+)
+
+
+# Run the GSEA-2T method
+# Please set nPermutations >= 1000
+rtna_disc.mp <- tna.gsea2(rtna_disc.mp, nPermutations = 1000)
+#-Performing two-tailed GSEA analysis...
+#--For 438 regulons...
+#|==============================================================================| 100%
+#|==============================================================================| 100%
+#GSEA2 analysis complete 
+View(rtna_disc.mp)
+
+# Get GSEA-2T results
+gsea2_disc.mp <- tna.get(rtna_disc.mp, what = "gsea2", ntop = -1)
+head(gsea2_disc.mp$differential)
+#Regulon Regulon.Size Observed.Score     Pvalue Adjusted.Pvalue
+#ENSG00000065978    YBX1           72          -0.84 0.00031238       0.0040515
+#ENSG00000153207  AHCTF1           18          -1.34 0.00099900       0.0040515
+#ENSG00000131668   BARX1           15          -1.91 0.00099900       0.0040515
+#ENSG00000123685   BATF3           14          -0.79 0.00099900       0.0040515
+#ENSG00000119866  BCL11A           47          -1.46 0.00099900       0.0040515
+#ENSG00000134107 BHLHE40           14           0.78 0.00099900       0.0040515
+
+write.table(gsea2_disc.mp,file = file.path("~/NCA.ER/NCA.MP.TF.Finalized/NCA.Disc.MP.tf/tni.dpi.filter.epsNA/","DISC.tna.gsea2.mp.txt"),sep = "\t",row.names = TRUE, col.names = TRUE)
+
+# Plot GSEA-2T results
+tna.plot.gsea2(rtna_disc.mp, labPheno="log2 fold changes,Disc", tfs="YBX1", file = "Disc.tna.gsea2_mp")
+
