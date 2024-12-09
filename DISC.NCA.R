@@ -848,6 +848,22 @@ rtna_disc <- tni2tna.preprocess(object = rtni_disc,
 #--Checking agreement between 'transcriptionalNetwork' and 'phenotype'... 5.3% ! 
 # Error: NOTE: 94.7% of 'transcriptionalNetwork' targets not represented in the 'phenotype'!
 
+#######
+#First MP+TF gene expression to build the rtni, with an argument eps = NA in tni.dpi.filter,
+#then using limma R Package the differential expression of metabolic genes were calculated 
+#and genes with adj.pvalue<0.05 were selected to build the rtna; THE RESULTS WHILE BUILDING THE RTNA WAS AS BELOW:
+
+#-Preprocessing for input data...
+#--Mapping 'phenotype' to 'phenoIDs'...
+#--Mapping 'hits' to 'phenoIDs'...
+#-Mapping 'transcriptionalNetwork' annotation to 'phenotype'...
+#--Checking agreement between 'transcriptionalNetwork' and 'phenotype'... 33.4% ! 
+#  --Extracting regulons...
+#-Preprocessing complete!
+#  
+#  Warning message:
+#  NOTE: 66.6% of 'transcriptionalNetwork' targets not represented in the 'phenotype'! 
+
 #---10.Extract Regulon Information--------------------------
 # Load necessary library
 library(dplyr)
