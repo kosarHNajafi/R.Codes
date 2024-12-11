@@ -1047,6 +1047,19 @@ rtna_disc <- tni2tna.preprocess(object = rtni_disc,
 #  
 #  Warning message:
 #  NOTE: 66.6% of 'transcriptionalNetwork' targets not represented in the 'phenotype'! 
+
+#First; all genes in discovery dataset Second 2611 metabolic genes(combined version) for builiding the TNA                        
+#rtna_discovery <- tni2tna.preprocess(object = rtni_Disc_all.NA, 
+#+                                    phenotype = tna.disc_mp$phenotype, 
+#+                                    hits = tna.disc_mp$hits, 
+#+                                    phenoIDs = tna.disc_mp$phenoID)
+#-Preprocessing for input data...
+#--Mapping 'phenotype' to 'phenoIDs'...
+#--Mapping 'hits' to 'phenoIDs'...
+#--Mapping 'transcriptionalNetwork' annotation to 'phenotype'...
+#--Checking agreement between 'transcriptionalNetwork' and 'phenotype'... 9.3% ! 
+#Error: NOTE: 90.7% of 'transcriptionalNetwork' targets not represented in the 'phenotype'!
+                        
 # Run the MRA method
 rtna_disc.mp <- tna.mra(rtna_disc.mp)
 #-Performing master regulatory analysis...
