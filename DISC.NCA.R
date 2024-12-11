@@ -761,11 +761,16 @@ rtni_disc <- tni.bootstrap(rtni_disc)
 #stopCluster(getOption("cluster"))  # avoid leak memory
 
 # Compute the DPI-filtered regulatory network
+#As a less arbitrary approach we suggest setting eps = NA, which will estimate the threshold from the null distribution computed in the permutation and bootstrap steps.
 rtni_disc <- tni.dpi.filter(rtni_disc, eps = NA)
 tni.regulon.summary(rtni_disc)
 
 #detailed information about a specific regulon
 tni.regulon.summary(rtni_disc, regulatoryElements = "DNMT1")
+
+#minRegulonSize = 15 is the defualt argument in tni.dpi.filter
+#rtni_disc_mp.tf.NA.15 <- tni.dpi.filter(rtni_disc_mp.tf, eps = NA, minRegulonSize = 15)
+#all.equal(rtni_disc_mp.tf.NA,rtni_disc_mp.tf.NA.15) #[1] TRUE
 
 # Save the TNI object for subsequent analyses
 save(rtni_disc, file = file.path("~/NCA/scripts/", "rtni_disc091124.Edges1761RData"))
@@ -1089,11 +1094,34 @@ rtna_disc.mp.15 <- tna.gsea1(rtna_disc.mp, nPermutations=1000,minRegulonSize = 1
 #|==============================================================================| 100%
 #-Gene set enrichment analysis complete 
 
+#sizeFilterMethod = "posANDneg",minRegulonSize = 15 are the defualt argument in tna.gsea1
+set.seed(21354897)
+# Run the GSEA method
+# Please set nPermutations >= 1000
+rtna_disc.mp.t1 <- tna.gsea1(rtna_disc.mp, nPermutations=1000)
+#-Performing gene set enrichment analysis...
+#--For 5 regulons...
+#|==============================================================================| 100%
+#-Gene set enrichment analysis complete 
+
+set.seed(21354897)
+rtna_disc.mp.15.t <- tna.gsea1(rtna_disc.mp, nPermutations=1000,minRegulonSize = 15)
+#-Performing gene set enrichment analysis...
+#--For 5 regulons...
+#  |==============================================================================| 100%
+#-Gene set enrichment analysis complete 
+
+identical(rtna_disc.mp.15.t,rtna_disc.mp.t1)
+#[1] TRUE
+                        
+set.seed(21354897)
 rtna_disc.mp.15.filtermethod <- tna.gsea1(rtna_disc.mp, nPermutations=1000,sizeFilterMethod = "posANDneg",minRegulonSize = 15)
 #-Performing gene set enrichment analysis...
 #--For 12 regulons...
 #|==============================================================================| 100%
 #-Gene set enrichment analysis complete 
+identical(rtna_disc.mp.15.t,rtna_disc.mp.15.filtermethod)
+#[1] TRUE
 
 # Get GSEA results
 gsea1_disc.mp <- tna.get(rtna_disc.mp, what="gsea1", ntop = -1)
