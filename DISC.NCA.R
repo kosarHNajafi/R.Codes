@@ -18,12 +18,19 @@ library(org.Hs.eg.db)
 library(RTN)
 library(snow)
 
-set.seed(123)
+#NOT TO INTERFERE WITH THE PACKAGE DEFAULT, set.seed was not used.
+#set.seed(123)
+#IF it is a consistent run --> set.seed once at the beginning; if, the run was in different days run before proceeding again
+#Longer random numbers(7 or 8) will ensure reproducibility better
+#set.seed(21354897) is saved in R file below:
+#"C:\Users\mohdb\OneDrive - Towheed International School\Documents\NCA.ER\NCA.MP.5tf\NCA.Disc.MP.5tf\Disc.NCA.MP.5tf.R"
 ###################################################################################
 #---Metabolic pathway genes without it's overlap with TF as a seperate disc_mp[list] and TF gene expressions as disc_tf[list]-------
 #---1.Load Gene Expression Data of 90 metabolic pathways = a matrix for counts/assays---------------------------------
 
-#The mutal genes with TFs are being deleted
+
+#The mutal genes(duplicate ones) with TFs are deleted
+#Consolidating Recon metabolic genes and 10.1038/nature10350[https://pubmed.ncbi.nlm.nih.gov/21760589/] results were not reproducible.
 #load txt. Format
 DISC.MP.Genes <- read.delim("~/NCA.ER/Disc.JustMP.Annotated2/Disc.Just.MP.Genes.txt")
 View(DISC.MP.Genes)
@@ -1094,7 +1101,8 @@ rtna_disc.mp.15 <- tna.gsea1(rtna_disc.mp, nPermutations=1000,minRegulonSize = 1
 #|==============================================================================| 100%
 #-Gene set enrichment analysis complete 
 
-#sizeFilterMethod = "posANDneg",minRegulonSize = 15 are the defualt argument in tna.gsea1
+#sizeFilterMethod = "posANDneg",minRegulonSize = 15 are the defualt argument in tna.gsea1 -->
+  #DON'T USE the "sizeFilterMethod" argument, BECAUSE WE LOSE MOST STROMG adj.pvalues and Regulon size in this case. 
 set.seed(21354897)
 # Run the GSEA method
 # Please set nPermutations >= 1000
