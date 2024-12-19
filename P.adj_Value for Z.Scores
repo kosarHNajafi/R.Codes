@@ -1,0 +1,97 @@
+#https://www.statology.org/p-value-of-z-score-r/
+#https://www.r-bloggers.com/2023/07/the-benjamini-hochberg-procedure-fdr-and-p-value-adjusted-explained/
+#---Discovery data set---------------------------------------------
+disc.MB <- read.delim("discovery.MB.txt",header = TRUE,as.is = TRUE)
+head(disc.MB)
+#Samples_Disc Ferro_PDS        z z.classification
+#1      MB-4189 1.0000000 3.661052               HF
+#2      MB-4222 1.0000000 3.661052               HF
+#3      MB-4313 1.0000000 3.661052               HF
+#4      MB-4141 0.9727958 3.486225               HF
+#5      MB-4310 0.9648617 3.435237               HF
+#6      MB-4012 0.9564316 3.381061               HF
+
+# Add a column for p-values based on the z-score
+disc.MB$p_value <- ifelse(
+  disc.MB$z > 0,  
+  pnorm(q = disc.MB$z, lower.tail = FALSE),  # Right-tailed test for z > 0
+  pnorm(q = disc.MB$z, lower.tail = TRUE)    # Left-tailed test for z <= 0
+)
+
+# Add a column for adjusted p-values using the Benjamini-Hochberg (BH) method
+disc.MB$Adjusted_P <- p.adjust(disc.MB$p_value, method = "BH")
+
+# View the updated data frame
+head(disc.MB)
+#Samples_Disc Ferro_PDS        z z.classification      p_value Adjusted_P
+#1      MB-4189 1.0000000 3.661052               HF 0.0001255909 0.04157058
+#2      MB-4222 1.0000000 3.661052               HF 0.0001255909 0.04157058
+#3      MB-4313 1.0000000 3.661052               HF 0.0001255909 0.04157058
+#4      MB-4141 0.9727958 3.486225               HF 0.0002449441 0.05878910
+#5      MB-4310 0.9648617 3.435237               HF 0.0002960176 0.05878910
+#6      MB-4012 0.9564316 3.381061               HF 0.0003610321 0.05975081
+
+write.table(disc.MB,file = "disc.MB.Z.Pvalue.txt",sep = "\t",row.names = FALSE)
+#--Validation----------------------------------------------
+valid.MB <- read.delim("validation.MB.txt",header = TRUE,as.is = TRUE)
+head(valid.MB)
+#V.sample.ID       PDS  z.score z.score.classifiction
+#1     MB-0000 1.0000000 3.632518                    HF
+#2     MB-0002 1.0000000 3.632518                    HF
+#3     MB-0010 1.0000000 3.632518                    HF
+#4     MB-0025 0.9974602 3.616102                    HF
+#5     MB-0035 0.9973492 3.615385                    HF
+#6     MB-0036 0.9825185 3.519528                    HF
+
+# Add a column for p-values based on the z-score
+valid.MB$p_value <- ifelse(
+  valid.MB$z.score > 0,  
+  pnorm(q = valid.MB$z.score, lower.tail = FALSE),  # Right-tailed test for z > 0
+  pnorm(q = valid.MB$z.score, lower.tail = TRUE)    # Left-tailed test for z <= 0
+)
+
+# Add a column for adjusted p-values using the Benjamini-Hochberg (BH) method
+valid.MB$Adjusted_P <- p.adjust(valid.MB$p_value, method = "BH")
+
+# View the updated data frame
+head(valid.MB)
+#V.sample.ID       PDS  z.score z.score.classifiction      p_value Adjusted_P
+#1     MB-0000 1.0000000 3.632518                    HF 0.0001403346 0.02981027
+#2     MB-0002 1.0000000 3.632518                    HF 0.0001403346 0.02981027
+#3     MB-0010 1.0000000 3.632518                    HF 0.0001403346 0.02981027
+#4     MB-0025 0.9974602 3.616102                    HF 0.0001495362 0.02981027
+#5     MB-0035 0.9973492 3.615385                    HF 0.0001499510 0.02981027
+#6     MB-0036 0.9825185 3.519528                    HF 0.0002161579 0.03131925
+
+write.table(valid.MB,file = "valid.MB.Z.Pvalue.txt",sep = "\t",row.names = FALSE)
+
+#---SessionInfo-------------------
+sessionInfo()
+R version 4.4.1 (2024-06-14 ucrt)
+Platform: x86_64-w64-mingw32/x64
+Running under: Windows 11 x64 (build 26100)
+
+Matrix products: default
+
+
+locale:
+[1] LC_COLLATE=English_United Arab Emirates.utf8 
+[2] LC_CTYPE=English_United Arab Emirates.utf8   
+[3] LC_MONETARY=English_United Arab Emirates.utf8
+[4] LC_NUMERIC=C                                 
+[5] LC_TIME=English_United Arab Emirates.utf8    
+
+time zone: Asia/Dubai
+tzcode source: internal
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+[1] readxl_1.4.3
+
+loaded via a namespace (and not attached):
+ [1] compiler_4.4.1    magrittr_2.0.3    cli_3.6.3         tools_4.4.1      
+ [5] pillar_1.9.0      glue_1.8.0        rstudioapi_0.17.1 tibble_3.2.1     
+ [9] utf8_1.2.4        fansi_1.0.6       cellranger_1.1.0  vctrs_0.6.5      
+[13] lifecycle_1.0.4   pkgconfig_2.0.3   rlang_1.1.4    
